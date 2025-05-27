@@ -1,8 +1,11 @@
-from fastapi import APIRouter
+from fastapi import FastAPI, Query, HTTPException
+from fastapi.responses import JSONResponse
 import os
 from uuid import uuid4
+import pandas as pd
+from app.core.reconciler import reconcile_files
 
-router = APIRouter()
+router = FastAPI()
 UPLOAD_FOLDER = 'app/uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
@@ -24,3 +27,21 @@ async def upload_files(file1: UploadFile = File(...), file2: UploadFile = File(.
             "size": len(content),
         })
     return {"message": "Files Uploaded Success", "files": saved_files}
+
+@router.post('/reconcile')
+async def reconcile_endpoint(file1: str = Query(...), file2: str = Query(...),col_product: str = Query(...),col_amount: str = Query(...),col_transaction_id: Optional[str] = Query(None)):
+    path1 = os.path.join(UPLOAD_FOLDER, file1)
+    path2 = os.path.join(UPLOAD_FOLDER, file2)
+
+    # Check if files exist
+    if not os.path.exists(path1):
+        raise HTTPException(status_code=404, detail=f"File {file1} not found")
+    if not os.path.exists(path2):
+        raise HTTPException(status_code=404, detail=f"File {file2} not found")
+    
+    df1 = pd.read_csv(file1)
+    df2 = pd.read_csv(file2)
+
+    result = reconcile_files(df1,df2,col_product = col_product, col_amount = col_amount, col_transaction_id = col_transaction_id)
+
+    return JSONResponse(content=result)
